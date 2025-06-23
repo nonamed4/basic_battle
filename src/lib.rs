@@ -1,5 +1,9 @@
+use rand::random_range;
+
 // For special moves
 type SpecialMove = Option<fn(&mut Board, side: Side, x: i32, y: i32)>;
+
+pub const SOLDIERS : [char; 7] = [' ', 'n', 'r', 's', 't', 'i', 'd'];
 
 #[derive(PartialEq)]
 pub enum Side {
@@ -7,19 +11,20 @@ pub enum Side {
     Up,
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Soldier {
-    character: char,
+    pub character: char,
     attack_range: i32,
     damage: i32,
     pub hp: i32,
     maxhp: i32,
+    pub point: i32,
     limit: bool
 }
 
 pub struct Board {
-    x_length: i32,
-    y_length: i32,
+    pub x_length: i32,
+    pub y_length: i32,
     up_side: Vec<Soldier>, // Goes like x1y1, x2y1, x3y1, ... x1y2, ... xlenylen.
     down_side: Vec<Soldier>, // Same thing here.
     // Our get function's coordinates start from x1y1, which is the top left corner.
@@ -108,7 +113,7 @@ impl Board {
         } else {
             self.down_side[((y - 1) * self.x_length + x - 1) as usize] = soldier.clone();
         }
-        return Ok(());
+        Ok(())
     }
     pub fn dead_scan(&mut self) {
         for c in 0..(self.x_length * self.y_length) {
@@ -156,6 +161,43 @@ impl Board {
             }
         }
     }
+    pub fn is_anyone_left(&self) -> bool {
+        for c in 0..self.x_length*self.y_length {
+            if self.down_side[c as usize].character != ' ' {
+                return true;
+            } else {
+                continue;
+            }
+        }
+        false
+    }
+    pub fn is_any_space_left(&self) -> bool {
+        for c in 0..self.x_length*self.y_length {
+            if self.up_side[c as usize].character == ' ' {
+                return true;
+            } else {
+                continue;
+            }
+        }
+        false
+    }
+    pub fn computers_move(&mut self) {
+        loop {
+            let computer_x: i32 = random_range(1..=self.x_length);
+            let computer_y: i32 = random_range(1..=self.y_length);
+            let computer_soldier: Soldier =
+                Soldier::letter_to_soldier(SOLDIERS[random_range(1..=6) as usize])
+                    .expect("Not guaranteed to be Some(Soldier) (main, 3)");
+            if self.get(computer_x, computer_y, &Side::Up).expect("Not guaranteed to be Some(Soldier) (main, 4)").character != ' ' {
+                if self.is_any_space_left() == false {
+                    break;
+                }
+            } else {
+                self.change(computer_soldier, computer_x, computer_y, Side::Up).expect("Not guaranteed to be Ok(()) (main, 1)");
+                break;
+            }
+        }
+    }
 }
 
 impl Soldier {
@@ -165,6 +207,7 @@ impl Soldier {
         damage: i32,
         hp: i32,
         maxhp: i32,
+        point: i32,
         limit: bool
     ) -> Soldier {
         Soldier {
@@ -173,29 +216,30 @@ impl Soldier {
             damage,
             hp,
             maxhp,
-            limit
+            point,
+            limit,
         }
     }
     pub fn new_normal() -> Soldier {
-        Soldier::new('n', 1, 1, 1, 1, true)
+        Soldier::new('n', 1, 1, 2, 2, 2, true)
     }
     pub fn new_trash() -> Soldier {
-        Soldier::new('s', 1, 1, 1, 1,  true)
+        Soldier::new('s', 1, 1, 1, 1, 1, true)
     }
     pub fn new_ranged() -> Soldier {
-        Soldier::new('r', 1, 2, 1, 1,  true)
+        Soldier::new('r', 2, 1, 1, 1, 2, true)
     }
     pub fn new_nothing() -> Soldier {
-        Soldier::new(' ', 0, 0, 0, 0,  true)
+        Soldier::new(' ', 0, 0, 0, 0, 0, true)
     }
     pub fn new_tank() -> Soldier {
-        Soldier::new('t', 1, 1, 4, 4,  true)
+        Soldier::new('t', 1, 1, 4, 4, 3, true)
     }
     pub fn new_op_ranged() -> Soldier {
-        Soldier::new('i', 2, 1, 1, 1,  false)
+        Soldier::new('i', 3, 1, 1, 1,  3,false)
     }
     pub fn new_dummy() -> Soldier {
-        Soldier::new('d', 1, 0, 0, 0,  true)
+        Soldier::new('d', 0, 0, 6, 6, 2,  true)
     }
     pub fn clone(&self) -> Soldier {
         Soldier::new(
@@ -204,7 +248,8 @@ impl Soldier {
             self.damage,
             self.hp,
             self.maxhp,
-            self.limit
+            self.point,
+            self.limit,
         )
     }
     pub fn attack(&self, game_board: &mut Board, side: Side, x: i32, y: i32) {
@@ -259,6 +304,34 @@ impl Soldier {
                     }
 
                 }
+            }
+        }
+    }
+    pub fn letter_to_soldier(letter: char) -> Option<Soldier> {
+        match letter {
+            ' ' => Some(Soldier::new_nothing()),
+            'n' => Some(Soldier::new_normal()),
+            'r' => Some(Soldier::new_ranged()),
+            's' => Some(Soldier::new_trash()),
+            't' => Some(Soldier::new_tank()),
+            'i' => Some(Soldier::new_op_ranged()),
+            'd' => Some(Soldier::new_dummy()),
+            _ => None,
+        }
+    }
+    pub fn list_soldiers(detailed: bool) {
+        // Please remember to update here.
+        println!("Soldiers are:");
+        
+        for i in 1..=3 {
+            let soldier = Soldier::letter_to_soldier(SOLDIERS[i]).expect("Not guaranteed to be Some(x) (Soldier, list_soldiers, 1)");
+            println!("{}: damage:{}, hp:{}, range:{}, max hp:{}, point value:{}.", soldier.character, soldier.damage, soldier.hp, soldier.attack_range, soldier.maxhp, soldier.point);
+        }
+        
+        if detailed == true {
+            for i in 4..=6 {
+                let soldier = Soldier::letter_to_soldier(SOLDIERS[i]).expect("Not guaranteed to be Some(x) (Soldier, list_soldiers, 1)");
+                println!("{}: damage:{}, hp:{}, range:{}, max hp:{}, point value:{}.", soldier.character, soldier.damage, soldier.hp, soldier.attack_range, soldier.maxhp, soldier.point);
             }
         }
     }
